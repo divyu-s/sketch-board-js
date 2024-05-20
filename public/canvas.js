@@ -22,17 +22,21 @@ let ctx = canvas.getContext("2d");
 ctx.lineWidth = pencilWidth;
 ctx.strokeStyle = pencilColor;
 
-function beginPath(x, y) {
+function beginPath(data) {
   ctx.beginPath();
-  ctx.moveTo(x, y);
+  ctx.moveTo(data.x, data.y);
 }
 
-function drawStroke(x, y) {
-  ctx.lineTo(x, y);
+function drawStroke(data) {
+  ctx.lineWidth = data.lineWidth;
+  ctx.strokeStyle = data.strokeStyle;
+  ctx.lineTo(data.x, data.y);
   ctx.stroke();
 }
 
-function undoRedoCanvas(track) {
+function undoRedoCanvas(newTrack) {
+  track = newTrack;
+
   let url = undoRedoTracker[track];
   let img = new Image(); // new image reference element
   img.src = url;
@@ -46,13 +50,25 @@ canvas.addEventListener("mousedown", (e) => {
   mouseDown = true;
 
   if (selectedOption) {
-    ctx.beginPath(e.clientX, e.clientY);
+    let data = {
+      x: e.clientX,
+      y: e.clientY,
+    };
+    // send data to server
+    socket.emit("beginPath", data);
   }
 });
 
 canvas.addEventListener("mousemove", (e) => {
   if (mouseDown && selectedOption) {
-    drawStroke(e.clientX, e.clientY);
+    let data = {
+      x: e.clientX,
+      y: e.clientY,
+      lineWidth: selectedOption === "pencil" ? pencilWidth : eraserWidth,
+      strokeStyle: selectedOption === "pencil" ? pencilColor : eraserColor,
+    };
+    // send data to server
+    socket.emit("drawStroke", data);
   }
 });
 
@@ -62,6 +78,12 @@ canvas.addEventListener("mouseup", () => {
   let url = canvas.toDataURL();
   undoRedoTracker.push(url);
   track = undoRedoTracker.length - 1;
+
+  let undoRedoObj = {
+    track,
+    undoRedoTracker,
+  };
+  socket.emit("undoRedoTracker", undoRedoObj);
 });
 
 pencil.addEventListener("click", () => {
@@ -70,9 +92,6 @@ pencil.addEventListener("click", () => {
   pencil.style.paddingBottom = "0.2rem";
   eraser.style.borderBottom = "none";
   eraser.style.paddingBottom = "0";
-
-  ctx.lineWidth = pencilWidth;
-  ctx.strokeStyle = pencilColor;
 });
 
 eraser.addEventListener("click", () => {
@@ -81,26 +100,20 @@ eraser.addEventListener("click", () => {
   eraser.style.paddingBottom = "0.2rem";
   pencil.style.borderBottom = "none";
   pencil.style.paddingBottom = "0";
-
-  ctx.lineWidth = eraserWidth;
-  ctx.strokeStyle = eraserColor;
 });
 
 pencilWidthEle.addEventListener("change", () => {
   pencilWidth = pencilWidthEle.value;
-  ctx.lineWidth = pencilWidth;
 });
 
 eraserWidthEle.addEventListener("change", () => {
   eraserWidth = eraserWidthEle.value;
-  ctx.lineWidth = eraserWidthEle.value;
 });
 
 pencilColorEle.forEach((colorEle) => {
   colorEle.addEventListener("click", (e) => {
     const color = colorEle.classList[0];
     pencilColor = color;
-    ctx.strokeStyle = pencilColor;
   });
 });
 
@@ -116,13 +129,31 @@ download.addEventListener("click", () => {
 undo.addEventListener("click", () => {
   if (track > 0) {
     track--;
-    undoRedoCanvas(track);
+    socket.emit("redoUndo", track);
   }
 });
 
 redo.addEventListener("click", () => {
   if (track < undoRedoTracker.length - 1) {
     track++;
-    undoRedoCanvas(track);
+    socket.emit("redoUndo", track);
   }
+});
+
+socket.on("beginPath", (data) => {
+  // data -> data from server
+  beginPath(data);
+});
+
+socket.on("drawStroke", (data) => {
+  drawStroke(data);
+});
+
+socket.on("redoUndo", (track) => {
+  undoRedoCanvas(track);
+});
+
+socket.on("undoRedoTracker", (undoRedoObj) => {
+  track = undoRedoObj.track;
+  undoRedoTracker = undoRedoObj.undoRedoTracker;
 });

@@ -1,4 +1,5 @@
 import express from "express";
+import http from "http";
 import { Server } from "socket.io";
 
 const PORT = 3000;
@@ -6,10 +7,7 @@ const app = express();
 
 app.use(express.static("public"));
 
-const server = app.listen(PORT, () => {
-  console.log(`Server is listening on port ${3000}`);
-});
-
+const server = http.createServer(app);
 const io = new Server(server);
 
 io.on("connection", (socket) => {
@@ -31,4 +29,8 @@ io.on("connection", (socket) => {
   socket.on("undoRedoTracker", (undoRedoObj) => {
     io.sockets.emit("undoRedoTracker", undoRedoObj);
   });
+});
+
+server.listen(PORT, () => {
+  console.log(`Server is listening on port ${3000}`);
 });
